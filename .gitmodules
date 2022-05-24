@@ -1,0 +1,6 @@
+[submodule "modules/ver"]
+	path = modules/ver
+	url = https://github.com/admenmod/ver.git
+[submodule "modules/touches-controller"]
+	path = modules/touches-controller
+	url = https://github.com/admenmod/touches-controller.git
