@@ -2,8 +2,9 @@
 Scene.create('main', function() {
 	const { GridMap, MotionByTouch } = ns['system'];
 	const { systemInfoDrawObject, screenSize, globalGridMap, motionByTouch } = ns['global'];
-	const { KEYS, InputKeysHandler, Editor, Buffer, BufferRenderer } = ns['textinput'];
-	
+	const { Editor, Buffer, Mark, Caret } = ns['editor.core'];
+	const { Style, BufferRenderer } = ns['editor.render'];
+
 
 	let input1 = document.createElement('input');
 	input1.style.position = 'fixed';
@@ -11,12 +12,18 @@ Scene.create('main', function() {
 	canvas.append(input1);
 
 
-	const inputKeysHandler = new InputKeysHandler(input1);
-	canvas.addEventListener('click', () => inputKeysHandler.focus());
 
+	const keyboardInputInterceptor = new KeyboardInputInterceptor(input1);
+	keyboardInputInterceptor.init();
+	canvas.addEventListener('click', () => keyboardInputInterceptor.focus());
+
+	const style = new Style({
+		color: '#77ee77'
+	});
+
+	let caret = new Caret();
 	const editor = new Editor();
-	const bufferRenderer = new BufferRenderer();
-	const style = bufferRenderer.style;
+	const bufferRenderer = new BufferRenderer({ style });
 
 	globalGridMap.isCoords = false;
 	globalGridMap.offset.set(style.padding);
@@ -25,23 +32,19 @@ Scene.create('main', function() {
 	this.preload(fetch(`${location.origin}/user-code/main.js`)
 		.then(data => data.text())
 		.then(data => {
-			editor.createBuffer(data);
+			editor.addBuffer(0, new Buffer(data));
 
 			editor.on('inputChar', (...args) => bufferRenderer.emit('inputChar', ...args));
 		}).then(() => {
 			let buffer = editor.buffers[0];
-			let caret = bufferRenderer.caret;
 
-			let put = (line, index, value) => line.substr(0, index) + value + line.substr(index);
-			let del = (line, index, size) => line.substr(0, index-size) + line.substr(index);
 
-			inputKeysHandler.on('keydown', e => {
-				console.log(e);
-				// editor.inputChar(e.key, e.code);
+			keyboardInputInterceptor.on('keydown', e => {
+				console.log();
 
-				if(e.key === 'Control' || e.key === 'Alt' || e.ctrl || e.alt) {
+				if(e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift' || e.ctrl || e.alt) {
 					if(e.ctrl) {
-						if(e.key === 'l') buffer.data = [''];
+						if(e.key === 'l') buffer.set('');
 						if(e.key === 's') alert('saveing');
 					};
 
@@ -49,19 +52,42 @@ Scene.create('main', function() {
 				};
 
 
-				if(e.key === 'Backspace') {
-					buffer.data[caret.y] = del(buffer.data[caret.y] || '', caret.x, 1);
-					
-					caret.sub(1, 0);
-				}
-				else if(e.key === 'ArrowUp') caret.add(0, -1);
-				else if(e.key === 'ArrowDown') caret.add(0, 1);
-				else if(e.key === 'ArrowLeft') caret.add(-1, 0);
-				else if(e.key === 'ArrowRight') caret.add(1, 0);
-				else if(e.key.length < 2) {
-					buffer.data[caret.y] = put(buffer.data[caret.y] || '', caret.x, e.data);
-					caret.add(1, 0);
+				if(e.key === 'ArrowUp') {
+					caret.y = caret.getCorrectPos(buffer).y;
+					caret.y += -1;
+					caret.y = caret.getCorrectPos(buffer).y;
+				} else if(e.key === 'ArrowDown') {
+					caret.y = caret.getCorrectPos(buffer).y;
+					caret.y += 1;
+					caret.y = caret.getCorrectPos(buffer).y;
+				} else if(e.key === 'ArrowLeft') {
+					caret.x = caret.getCorrectPos(buffer).x;
+					caret.x += -1;
+					caret.x = caret.getCorrectPos(buffer).x;
+				} else if(e.key === 'ArrowRight') {
+					caret.x = caret.getCorrectPos(buffer).x;
+					caret.x += 1;
+					caret.x = caret.getCorrectPos(buffer).x;
+				} else if(e.key === 'Enter') {
+					buffer.put(caret.y, caret.x, '\n');
+					caret.y += 1;
+					caret.x = 0;
+				} else if(e.key === 'Escape') {
+					keyboardInputInterceptor.blur();
+				} else if(e.key === 'Backspace') {
+					// let area = new Area(caret.buf());
+					// Vector2.prototype.set.call(area, caret);
+
+					buffer.delChar(caret.y, caret.x, -1);
+
+					caret.x -= 1;
+					caret.x = caret.getCorrectPos(buffer).x;
 				};
+			});
+
+			keyboardInputInterceptor.on('input', e => {
+				buffer.putChar(caret.y, caret.x, e.data);
+				caret.add(1, 0);
 			});
 		})
 	);
@@ -78,7 +104,7 @@ Scene.create('main', function() {
 	//========== Update ==========//
 	this.update = dt => {
 		//========== pre process ==========//
-		// motionByTouch.update(dt, touches, layers.main.camera);
+		motionByTouch.update(dt, touches, layers.main.camera);
 
 
 		//========== process ==========//
@@ -90,7 +116,7 @@ Scene.create('main', function() {
 		globalGridMap.draw(layers.main.ctx, layers.main.camera);
 
 
-		bufferRenderer.drawBuffer(editor.buffers[0], layers.main);
+		bufferRenderer.drawBuffer(layers.main, editor.buffers[0], caret);
 
 
 		// systemInfoDrawObject.update(dt);

@@ -24,8 +24,6 @@ ns['global'] = new function() {
 	renderLoop.on('render', () => touches.nullify());
 
 	loading.then(() => {
-		console.log('loaded scripts (all)');
-
 		renderLoop.start();
 
 		Scene.run('main');
